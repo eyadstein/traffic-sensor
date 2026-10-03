@@ -9,3 +9,4 @@ pydeprecate<0.12
 av
 tqdm
 defusedxml
+streamlit
