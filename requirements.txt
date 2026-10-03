@@ -1,0 +1,11 @@
+numpy
+scipy
+pandas
+pyyaml
+opencv-python
+onnxruntime
+supervision<0.31
+pydeprecate<0.12
+av
+tqdm
+defusedxml

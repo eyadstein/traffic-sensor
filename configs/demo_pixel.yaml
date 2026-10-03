@@ -1,0 +1,7 @@
+# Smoke-test config for footage without calibration: no homography -> no km/h, trips use pixel gates
+zones:
+  A: [[0, 0], [768, 0], [768, 150], [0, 150]]
+  B: [[0, 280], [768, 280], [768, 432], [0, 432]]
+tracker: {buffer_frames: 30, min_frames: 2}
+detector: {conf: 0.3, iou: 0.5}
+traffic: {window_s: 10, eval_every_s: 2}

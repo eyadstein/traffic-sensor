@@ -1,0 +1,74 @@
+det_noise:
+  dropout: 0.02
+  jitter_px: 1.5
+fps: 15
+homography:
+  image_points:
+  - - 436.5
+    - 159.3
+  - - 523.0
+    - 160.2
+  - - 529.9
+    - 245.8
+  - - 430.4
+    - 245.3
+  world_points:
+  - - 34
+    - 24
+  - - 46
+    - 24
+  - - 46
+    - 36
+  - - 34
+    - 36
+tracker:
+  buffer_frames: 20
+  min_frames: 2
+traffic:
+  eval_every_s: 5
+  free_flow_kmh: 45
+  hold: 2
+  min_samples: 20
+  window_s: 20
+trips:
+  dwell_s: 0.3
+  gate: 6.0
+  ghost_ttl_s: 4.0
+  lost_after_s: 0.7
+zones:
+  E:
+  - - 696
+    - 160
+  - - 803
+    - 160
+  - - 850
+    - 246
+  - - 726
+    - 246
+  N:
+  - - 447
+    - 21
+  - - 513
+    - 21
+  - - 518
+    - 84
+  - - 442
+    - 84
+  S:
+  - - 421
+    - 383
+  - - 539
+    - 383
+  - - 555
+    - 607
+  - - 405
+    - 607
+  W:
+  - - 157
+    - 160
+  - - 264
+    - 160
+  - - 234
+    - 246
+  - - 110
+    - 246

@@ -1,0 +1,55 @@
+fps: 25.0
+homography:
+  image_points:
+  - - 622.0
+    - 334.0
+  - - 853.0
+    - 290.0
+  - - 953.0
+    - 478.0
+  - - 760.0
+    - 520.0
+  world_points:
+  - - 0
+    - 0
+  - - 3.5
+    - 0
+  - - 3.5
+    - 8.0
+  - - 0
+    - 8.0
+zones:
+  FAR:
+  - - 0
+    - 0
+  - - 960
+    - 0
+  - - 960
+    - 255
+  - - 0
+    - 255
+  NEAR:
+  - - 0
+    - 470
+  - - 960
+    - 470
+  - - 960
+    - 540
+  - - 0
+    - 540
+tracker:
+  buffer_frames: 50
+  min_frames: 3
+detector:
+  conf: 0.3
+  iou: 0.5
+trips:
+  dwell_s: 0.4
+  lost_after_s: 0.8
+  ghost_ttl_s: 4.0
+  gate: 6.0
+traffic:
+  window_s: 30
+  eval_every_s: 5
+  hold: 2
+  min_samples: 20
