@@ -2,7 +2,8 @@
 
 python src/pipeline.py --video data/x.mp4 --config configs/x.yaml --out output/run1
 """
-import argparse, csv, json, os, sys, time
+import argparse, csv, json, os, sys, time, warnings
+warnings.filterwarnings('ignore', message='.*ByteTrack.*', category=FutureWarning)
 import cv2, numpy as np, supervision as sv, yaml
 
 sys.path.insert(0, os.path.dirname(__file__))
