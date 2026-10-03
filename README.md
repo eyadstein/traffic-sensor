@@ -62,3 +62,5 @@ Add `--no-stitch` and `--out output/synth_nostitch` for the ablation. For a UA-D
 ## Credits
 
 UA-DETRAC dataset (arXiv:1511.04136). Check its terms before reusing the footage.
+
+Windows: run `.\run_demo.ps1` instead of `run_demo.sh`. License: MIT.
