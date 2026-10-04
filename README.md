@@ -69,3 +69,11 @@ Windows: run `.\run_demo.ps1` instead of `run_demo.sh`. License: MIT.
 
     streamlit run src/dashboard.py
 
+
+## Tools
+
+- `python -m pytest -q tests` runs the unit tests (trip logic, stitching, speed, geometry).
+- `python src/export_db.py --run output/<run>` exports a run to SQLite (`--parquet` for Parquet).
+- `python src/scale_fix.py --video <clip> --config <yaml> --meters <real distance>` rescales km/h from one measured distance.
+
+Note: on the UA-DETRAC clip the calibration used an estimated rectangle near the camera, so km/h and the traffic label there are not trustworthy. Speed accuracy is validated only on the synthetic scene.
