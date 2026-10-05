@@ -1,79 +1,140 @@
-# CCTV → Intelligent Traffic Sensor
+# CCTV traffic sensor
 
-YOLO11 (ONNX) + ByteTrack + ground-plane homography + trip state machine → speed (km/h), OD matrix, Smooth/Moderate/Heavy.
+[![tests](https://github.com/eyadstein/traffic-sensor/actions/workflows/tests.yml/badge.svg)](https://github.com/eyadstein/traffic-sensor/actions/workflows/tests.yml)
 
-## Setup (Linux/macOS/Windows)
-```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-mkdir -p data output configs
-# detector weights (YOLO11n exported to ONNX)
-curl -L -o data/yolo11n.onnx https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11n.onnx
-# or a bigger/better model:  pip install ultralytics && yolo export model=yolo11s.pt format=onnx
-```
-
-## 1. Validate the logic (no footage needed)
-```bash
-./run_demo.sh        # synthetic intersection + stitching ablation
-```
-
-## 2. Run on your own fixed-camera clip
-```bash
-python src/calibrate.py --video data/my_clip.mp4 --out configs/my_clip.yaml     # click 4 road points + 4 zones
-python src/pipeline.py  --video data/my_clip.mp4 --config configs/my_clip.yaml --out output/my_clip
-```
-Outputs in `output/my_clip/`: `annotated.mp4`, `tracks.csv`, `trips.csv` (status/origin/dest/speed per vehicle),
-`od_matrix.csv`, `traffic_timeline.csv`, `merge_events.json`, `summary.json`.
-Add `--no-stitch` for the ablation, `--no-video` for speed.
-
-## Tuning (config yaml)
-- `tracker.buffer_frames`: how long ByteTrack keeps lost tracks (≈ 2 s of frames).
-- `trips`: `dwell_s` (hysteresis before a trip counts as complete), `ghost_ttl_s` (how long a vanished vehicle waits to be re-identified), `gate` (metres of re-ID search radius).
-- `traffic.free_flow_kmh`: set it to the road's real free-flow speed; otherwise it is estimated from the 90th-percentile speed seen.
-- Better models: use `yolo11s/m` ONNX and raise `detector.imgsz` for small/far vehicles.
-
-## Known limits
-- Homography assumes a flat road; keep calibration points near the area you measure.
-- Validate on your footage: hand-count a clip for OD, GPS-drive for speed.
-- supervision's ByteTrack is deprecated (removed in 0.31), so the version is pinned.
-
-## Windows (PowerShell)
-
-    python -m venv .venv
-    .\.venv\Scripts\Activate.ps1
-    pip install -r requirements.txt
-    python src/synth.py --out data/synth
-    curl.exe -L -o data/yolo11n.onnx https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11n.onnx
-    python -W ignore src/pipeline.py --video data/synth.mp4 --config configs/synth.yaml --detector gt --gt data/synth_gt.json --out output/synth_stitch --no-video
-    python src/evaluate.py --gt data/synth_gt.json --run output/synth_stitch
-
-Add `--no-stitch` and `--out output/synth_nostitch` for the ablation. For a UA-DETRAC sequence:
-`python src/ua_detrac_to_video.py --zip <zip> --seq MVI_39031 --out data/MVI_39031.mp4`
-
-## Validation so far
-
-- Synthetic 4-way intersection (106 vehicles, simulated occlusions, noisy ground-truth detector): correct origin and destination per vehicle 77% without ID stitching vs 91% with it; ID breaks 37 vs 9; speed MAE about 1 km/h.
-- Real footage (UA-DETRAC MVI_39031, yolo11n): hand-counted two 10 s windows. Pipeline within 1 per direction in both (10 hand vs 8 pipeline), so it may undercount slightly. Small sample.
-- Not validated: km/h on real footage (calibration length was estimated, not measured) and the Smooth/Moderate/Heavy label, which depends on speed.
+Turn a fixed CCTV camera into a traffic sensor with computer vision only: no extra hardware.
 
 ![demo](docs/demo_frame.jpg)
 
-## Credits
+## What it does
 
-UA-DETRAC dataset (arXiv:1511.04136). Check its terms before reusing the footage.
+- Detects and tracks vehicles with YOLO11 (ONNX, runs on CPU) and ByteTrack.
+- Estimates speed in km/h by projecting each vehicle's ground-contact point through a homography.
+- Builds an origin-destination (OD) matrix over entry/exit zones you draw.
+- Classifies traffic as Smooth / Moderate / Heavy from speed relative to free-flow.
+- Keeps each vehicle's identity through occlusions, so a trip is counted exactly once.
 
-Windows: run `.\run_demo.ps1` instead of `run_demo.sh`. License: MIT.
+The hard part is the memory, not the detection. Trackers drop IDs behind trees or other vehicles, and a naive
+counter then splits one trip into two or loses it. `src/trips.py` is a small state machine that fixes this.
 
-## Dashboard
+## How it works
 
-    streamlit run src/dashboard.py
+```mermaid
+flowchart LR
+  V[Video] --> D[YOLO11 detect]
+  D --> T[ByteTrack]
+  T --> G[Footpoint to metres<br/>homography]
+  G --> M[Trip state machine<br/>zones, dwell, ghost re-ID]
+  G --> K[Speed km/h]
+  M --> O[OD matrix]
+  K --> C[Traffic classifier]
+  M --> R[(CSV / SQLite)]
+  C --> R
+  O --> R
+```
+
+```mermaid
+stateDiagram-v2
+  [*] --> ACTIVE
+  ACTIVE --> COMPLETED: stays in a different zone >= dwell time
+  ACTIVE --> GHOST: track vanishes outside a zone
+  GHOST --> ACTIVE: new track near the predicted position
+  GHOST --> LOST: ghost lifetime expires
+  COMPLETED --> [*]
+```
+
+- A trip is counted once, when the vehicle stays in an exit zone for the dwell time (hysteresis against boundary jitter).
+- A vehicle that vanishes mid-road becomes a ghost for a few seconds. A new track of a compatible class that appears
+  near its constant-velocity prediction inherits its identity and origin.
+- Vehicles that appear mid-frame get an origin guessed from their heading. These are reported (`origin_guessed`).
+
+## Quick start
+
+Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+curl.exe -L -o data/yolo11n.onnx https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11n.onnx
+.\run_demo.ps1
+```
+
+Linux / macOS:
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+curl -L -o data/yolo11n.onnx https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11n.onnx
+./run_demo.sh
+```
+
+The demo generates a synthetic 4-way intersection with exact ground truth and compares stitching on and off.
+
+## Use it on your own footage
+
+```bash
+python src/calibrate.py --video data/clip.mp4 --out configs/clip.yaml --zones FAR,NEAR   # click road points + zones
+python src/pipeline.py  --video data/clip.mp4 --config configs/clip.yaml --out output/clip
+streamlit run src/dashboard.py                                                           # view the results
+```
+
+Calibration needs four road-surface points that form a rectangle of known size. The accuracy of km/h depends
+on that measurement. `src/scale_fix.py` rescales speeds from one measured distance.
+
+UA-DETRAC sequences are JPEG folders; convert one without unpacking the whole zip:
+
+```bash
+python src/ua_detrac_to_video.py --zip ua_detrac_test_set.zip --seq MVI_39031 --out data/MVI_39031.mp4
+```
+
+Outputs in `output/<run>/`: `annotated.mp4`, `tracks.csv`, `trips.csv`, `od_matrix.csv`, `traffic_timeline.csv`,
+`merge_events.json`, `summary.json`. Useful flags: `--no-stitch` (ablation), `--no-video` (faster).
+
+## Validation
+
+| Check | Result |
+|---|---|
+| Synthetic intersection (106 vehicles, simulated occlusions, noisy detector): vehicles with correct origin and destination | 91% with stitching, 77% without |
+| Same scene: tracker ID breaks | 37 without stitching, 9 with |
+| Same scene: speed error (known calibration geometry) | about 1 km/h MAE |
+| Real clip, UA-DETRAC MVI_39031 (`yolo11n`): hand count of two 10 s windows | 10 by hand vs 8 by the pipeline, within 1 per direction and window |
+
+Details and limits: [docs/validation.md](docs/validation.md). The real-clip check covers about 20 vehicles, so it
+shows the zone logic works but is not an accuracy figure.
+
+## Limitations
+
+- On the real clip, km/h and the Smooth/Moderate/Heavy label are not trustworthy: the calibration rectangle was
+  estimated, not measured. Speed accuracy is validated only on the synthetic scene.
+- The homography assumes a flat road. Accuracy drops toward the horizon.
+- `yolo11n` misses some far or small vehicles. Dense traffic and trees still cause ID switches.
+- Validated on one real clip so far.
+
+## Project structure
+src/pipeline.py main loop: detect, track, speed, trips, outputs
+src/trips.py trip state machine (identity, OD counting, speed)
+src/traffic.py traffic condition classifier
+src/geometry.py homography and zones
+src/detector.py YOLO11 ONNX detector
+src/calibrate.py click calibration; src/scale_fix.py rescale speeds from one distance
+src/dashboard.py Streamlit dashboard; src/export_db.py SQLite / Parquet export
+src/synth.py, evaluate.py synthetic scene with ground truth and its scorer
+src/window_counts.py pipeline counts in a time window, for hand-count checks
+tests/ unit tests and an end-to-end synthetic benchmark
 
 
-## Tools
+## Development
 
-- `python -m pytest -q tests` runs the unit tests (trip logic, stitching, speed, geometry).
-- `python src/export_db.py --run output/<run>` exports a run to SQLite (`--parquet` for Parquet).
-- `python src/scale_fix.py --video <clip> --config <yaml> --meters <real distance>` rescales km/h from one measured distance.
+```bash
+python -m pytest -q                 # everything, about a minute
+python -m pytest -q -m "not slow"   # fast unit tests only
+```
 
-Note: on the UA-DETRAC clip the calibration used an estimated rectangle near the camera, so km/h and the traffic label there are not trustworthy. Speed accuracy is validated only on the synthetic scene.
+GitHub Actions runs the same tests on every push.
+
+## Credits and license
+
+MIT, see [LICENSE](LICENSE). Built on YOLO11 (Ultralytics), ByteTrack (Zhang et al., arXiv:2110.06864),
+and supervision (Roboflow). Real-footage tests use UA-DETRAC (arXiv:1511.04136): check its terms before reusing
+the footage.

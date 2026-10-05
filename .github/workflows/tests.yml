@@ -1,0 +1,17 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install numpy scipy pandas pyyaml onnxruntime "supervision==0.30.6" "pydeprecate<0.12" pytest
+          pip uninstall -y opencv-python
+          pip install --force-reinstall --no-deps opencv-python-headless
+      - name: Unit tests and synthetic benchmark
+        run: python -m pytest -q
